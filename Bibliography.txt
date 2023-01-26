@@ -1,0 +1,12 @@
+This project has been made by the help of :-
+1. Django Documentation "https://docs.djangoproject.com/en/2.2/"
+2. Django-crispy-forms Documentation 
+	"https://django-crispy-forms.readthedocs.io/en/latest/"
+3. Bootstrap4 Documentation 
+	"https://getbootstrap.com/docs/4.3/getting-started/introduction/" 
+4. Google "https://www.google.com"
+5. Stackoverflow "https://stackoverflow.com/"
+6. Youtube "https://www.youtube.com"
+
+Under the guidance and support of our C.S. teacher :-
+Mr. Shaktirish Kumar Agarwal(PGT Computer Science, Ben-Hur Public School)

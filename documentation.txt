@@ -1,0 +1,163 @@
+Programming Language used :- Python 3.6
+
+
+Web Famework used :- Django 2.2
+
+
+Database used :- SQLite3
+
+
+Libraries used :-
+    1. pillow :- for using images in the web project.
+    2. django-crispy-forms :- for stying the html forms used in the project.
+    3. bootstrap4 :- css libraray used in html pages
+    4. jquery3 :- required for functioning of bootstrap4
+
+django project name :- blogapp
+
+
+web apps in the project :-
+    1. accounts :- for handling the account related information of the users.
+    2. blog :- for managing the blogs.
+
+
+files in the root directory(i.e blogapp folder) of the project :-
+    1. __init__.py :- indicates that it is package.
+
+    2. settings.py :- all the settings of the web project are in this file
+        The lists used in it are :-
+            ALLOWED_HOSTS :- list of all allowed hosts
+            INSTALLED_APPS :- list of all installed apps in this project
+            MIDDLEWARE :- list of all the middleware
+            TEMPLATES :- information about the HTML templates
+            AUTH_PASSWORD_VALIDATORS :- information about the django inbuilt
+					password validators
+        The dictionaries used in it are :-
+            DATABASES :- information about the database
+
+    3. urls.py :- manages url requests of the project and contains url patterns.
+        The dictionaries used in it are :-
+            a. urlpatterns :- for storing the urlpatterns
+
+    4. wsgi.py :- one the auto created files by django, it forwards requests to
+		  the web application.
+
+
+accounts app contains:-
+    1. __init__.py :- indicates that it is package
+
+    2. admin.py :- for registering models in admin site
+
+    3. apps.py :- for starting the signals.py file
+
+    4. forms.py :- for managing the forms
+        Classes used :-
+            a. RegistrationForm :- for creating the user register form
+            b. UserUpdateForm :- for updating user info
+            c. ProfileUpdateForm :- for updating user profile
+        Tuples used :-
+            a. fields :- for giving the names of the fields that are to be
+			 included in the form.
+
+    5. models.py :- manages the tables in the database. Each class in this file
+		    represents a table in the database.
+        Classes used :-
+            a. Profile :- represents User-Profle table in the database
+                Functions in the class are :-
+                    a. __str__ :- returns the string form of the object
+                    b. save :- for saving the user profile
+
+    6. signals.py :- for creating a profile for a user whenever a new account is
+		     created.
+        The functions in it are :-
+            a. create_profile :- for creating user profile
+            b. save_profile :- for saving the user profile
+
+    7. urls.py :- for url handling of the accounts app.
+        The dictionaries used in it are :-
+            a. urlpatterns :- for storing the urlpatterns
+
+    8. views.py :- handles the views for the different url requests.
+        The functions used in it are :-
+            a. signup_user :- for signing up the new user
+            b. login_user :-  for loging in the user
+            c. logout_user :- for loging out the user
+            d. user_profile :- for showing the profile of the current user
+            e. show_user_profile :- for showing the profile of any user
+        The dictionaries used :-
+            The dictionaries used in this file are for passing the data values
+	    from a python program to a html page.
+
+
+blog app contains:-
+    1. __init__.py :- indicates that it is package
+
+    2. admin.py :- for registering models in admin site
+
+    3. apps.py
+
+    4. forms.py :- for managing the forms
+        Classes used :-
+            a. CreateBlog :- for creating a new blog
+            b. Blog_review_form :- for creating a new blog review i.e comment
+        Tuples used :-
+            a. fields :- for giving the names of the fields that are to be
+			 included in the form.
+
+    5. models.py :- manages the tables in the database. Each class in this file
+		    represents a table in the database.
+        Classes used :-
+            a. Blog :- represents Blog table in the database
+                Functions in the class are :-
+                    a. __str__ :- returns the string form of the object
+                    b. get_link :- link for showing the details of individual blog
+                    c. snippet :- snippet of the blog if its body is exceed 50
+				  characters for showing in the blog list
+                    d. img_file_name :- getting the image file name of the blog
+					for deleting it whenever the blog is
+					deleted
+            b. Blog_reviews :- represents Blog-review table in the database
+                Functions in the class are :-
+                    a. __str__ :- returns the string form of the object
+
+
+    6. urls.py :- for url handling of the blog app
+        the dictionaries used in it are :-
+            a. urlpatterns :- for storing the urlpatterns
+
+    7. views.py :- handles the views for the different url requests
+        The functions used in it are :-
+            a. list :- displays the list of all the blogs
+            b. blog_detail :- showing the detail og the blog
+            c. create_blog :- for creating a new blog
+            d. delete_blog :- deletes a particular blog from the database
+            e. delete_blog_review :- deletes a particular blog-review i.e comment
+				     from the database
+            f. comment_blog :- for creting comment for a blog
+            g. edit_blog :- for editing a blog
+            h. delete_blog_confirmation :- asks for confirmation before deleting
+					   a blog
+            i. about :- displays the about page
+            j. announcements :- displays the announcements page
+            k. calenders :- displays the calenders page
+            l. portfolio :- displays the portfolio page which is also the first
+			    page of the website
+        The dictionaries used :-
+            the dictionaries used in this file are for passing the data values
+	    from a python program to a html page
+
+
+Other folders in the project include :-
+    1. css :- conatins the css files
+        a. portfolio.css
+        b. style.css
+
+    2. images :- contains images of the project
+
+    3. templates: - conatins all the HTML templates for the blogapp project
+
+Files in the root directory of the project :-
+1. db.sqlite3 :- database file for the blogapp project.
+
+2. manage.py :- manages and controls the entire project. It is used to manage 
+		the web server and database management.

@@ -1,0 +1,1001 @@
+accounts/__init__.py :-
+default_app_config = 'accounts.apps.AccountsConfig'
+
+
+accounts/admin.py :-
+from django.contrib import admin
+from .models import Profile
+
+# Register your models here.
+admin.site.register(Profile)
+
+
+
+accounts/apps.py :-
+from __future__ import unicode_literals
+from django.apps import AppConfig
+
+
+class AccountsConfig(AppConfig):
+    name = 'accounts'
+
+    def ready(self):
+        import accounts.signals
+
+
+
+accounts/forms.py :-
+from django import forms
+from django.contrib.auth.models import User
+from django.contrib.auth.forms import UserCreationForm
+from .models import Profile
+
+#for creating new user
+class RegistrationForm(UserCreationForm):
+    email = forms.EmailField(required=True)
+
+    class Meta:
+        model = User
+        fields = ('username','email','password1','password2')
+
+#for updating User(inbuilt model) information
+class UserUpdateForm(forms.ModelForm):
+    email = forms.EmailField(required=True)
+
+    class Meta:
+        model = User
+        fields = ('email',)
+
+#for updating user profile
+class ProfileUpdateForm(forms.ModelForm):
+    #to remove the currently and clear
+    image = forms.ImageField(label=('Profile Image'), required=False, error_messages = {'invalid':("Image files only")}, widget=forms.FileInput)
+
+    class Meta:
+        model = Profile
+        fields = ('image',)
+
+
+
+accounts/models.py :-
+from django.db import models
+from django.contrib.auth.models import User
+from PIL import Image
+
+class Profile(models.Model):
+    #OneToOneField with the inbuilt User model
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    image = models.ImageField(default='profile_pics/default.jpg', upload_to='profile_pics', blank=True)
+
+    class Meta:
+        verbose_name = 'Profile'
+        verbose_name_plural = 'Profiles'
+
+    def __str__(self):
+        return self.user.username
+
+    #for resizing the image
+    def save(self, *args, **kwargs):
+        super().save()
+        img = Image.open(self.image.path)
+        if img.height > 300 or img.width > 300:
+            output_size = (300,300)
+            img.thumbnail(output_size)
+            img.save(self.image.path)
+
+
+
+accounts/signals.py :-
+#This file creates profle for a user whenever a new user is created
+from django.db.models.signals import post_save
+from django.contrib.auth.models import User
+from django.dispatch import receiver
+from .models import Profile
+
+@receiver(post_save, sender=User)
+def create_profile(sender, instance, created, **kwargs):
+    if created:
+        Profile.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_profile(sender, instance, **kwargs):
+    instance.profile.save()
+
+
+
+accounts/urls.py :-
+from django.conf.urls import url
+from . import views
+
+app_name ='accounts'
+
+urlpatterns = [
+    url(r'^signup/$', views.signup_user, name="signup_user"),
+    url(r'^login/$', views.login_user, name="login_user"),
+    url(r'^logout/$', views.logout_user, name="logout_user"),
+    url(r'^profile/$', views.user_profile, name="user_profile"),
+    url(r'^show/(?P<user_id>\d+)/$', views.show_user_profile, name="show_user_profile"),
+]
+
+
+
+accounts/views.py :-
+#for displaying webpages
+from django.shortcuts import render, redirect
+#for checking if the user is logged in
+from django.contrib.auth.decorators import login_required
+#for login and signup
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth import login, logout
+#for importing forms
+from . forms import RegistrationForm, UserUpdateForm, ProfileUpdateForm
+#for showing profiles
+from django.contrib.auth.models import User
+#importing models
+from blog.models import Blog
+#for messages
+from django.contrib import messages
+
+def signup_user(request):
+    #if user is already logged in
+    if request.user.is_authenticated:
+        msg = 'You are already logged in!'
+        return render(request, 'errors.html', {'msg': msg})
+    else:
+        #for signing up the user(post data and show errors if any)
+        if request.method == 'POST':
+            #registering data entered by the user
+            form = RegistrationForm(request.POST)
+            if form.is_valid():
+                #getting username the user
+                user = form.save()
+                username = form.cleaned_data.get('username')
+                #for displaying success msg
+                msg = 'Account created for ' + username +'. You have been logged in.'
+                messages.success(request, msg)
+                #for logging in the user
+                login(request, user)
+                return redirect('blog:list')
+        #for signing up the user(create form and get data)
+        else:
+            form = RegistrationForm()
+        return render(request, 'accounts/signup.html', {'form': form})
+
+def login_user(request):
+    #if user is already logged in
+    if request.user.is_authenticated:
+        msg = 'You are already logged in.'
+        return render(request, 'errors.html', {'msg': msg})
+    else:
+        #for loging in the user(post data and show errors if any)
+        if request.method == 'POST':
+            #registering data entered by the user
+            form = AuthenticationForm(data = request.POST)
+            if form.is_valid():
+                #getting username the user
+                user = form.get_user()
+                username = form.cleaned_data.get('username')
+                #for displaying success msg
+                msg = 'User ' + username + ' has been logged in!'
+                messages.success(request, msg)
+                login(request, user)
+                #to redirect to createblog page(if user arrived this page through createblog page)
+                if 'next' in request.POST:
+                    return redirect(request.POST.get('next'))
+                #to redirect to blog list
+                else:
+                    return redirect('blog:list')
+        #for loging in the user(create form and get data)
+        else:
+            form = AuthenticationForm()
+        return render(request, 'accounts/login.html', {'form': form})
+
+def logout_user(request):
+    if request.user.is_authenticated:
+        logout(request)
+        return render(request, 'accounts/logged-out.html')
+    else:
+        msg = 'You are not logged in.'
+        return render(request, 'errors.html', {'msg': msg})
+
+#showing profle of the current user
+@login_required
+def user_profile(request):
+    #all blogs by the user
+    blogs = Blog.objects.filter(author = request.user).order_by('created_date')
+    #to update user profile
+    #for updating user profile(post data and show errors if any)
+    if request.method == 'POST':
+        #creating forms
+        u_form = UserUpdateForm(request.POST, instance=request.user)
+        p_form = ProfileUpdateForm(request.POST, request.FILES,
+        instance=request.user.profile)
+        if u_form.is_valid() and p_form.is_valid():
+            u_form.save()
+            p_form.save()
+            #showing success msg
+            msg = 'Your profile has been updated!'
+            messages.success(request, msg)
+            return redirect('accounts:user_profile')
+    #for updating user profile(create form and get data)
+    else:
+        u_form = UserUpdateForm(instance=request.user)
+        p_form = ProfileUpdateForm(instance=request.user.profile)
+    #dictionary to store data to be passed in the render function
+    context = {'u_form' : u_form , 'p_form' : p_form,'blogs': blogs}
+    return render(request, 'accounts/profile.html', context)
+
+#showing profile of other users
+def show_user_profile(request, user_id):
+    #information about the user
+    user = User.objects.get(id = user_id)
+    #all blogs by the user
+    blogs = Blog.objects.filter(author=user).order_by('created_date')
+    return render(request, 'accounts/show_profile.html', {'user': user,'blogs': blogs})
+
+
+
+blog/__init__.py :-
+#this file is empty
+
+
+
+blog/admin.py :-
+from django.contrib import admin
+from . models import Blog, Blog_reviews
+
+# Register your models here.
+admin.site.register(Blog)
+admin.site.register(Blog_reviews)
+
+
+
+blog/apps.py :-
+from django.apps import AppConfig
+
+
+class BlogConfig(AppConfig):
+    name = 'blog'
+
+
+
+blog/forms.py :-
+from django import forms
+from . import models
+
+#form for creating new blog
+class CreateBlog(forms.ModelForm):
+    #to remove the currently and clear
+    image = forms.ImageField(label=('Blog Image'), required=False, error_messages = {'invalid':("Image files only")}, widget=forms.FileInput)
+
+    class Meta:
+        model = models.Blog
+        fields = ('title','body','image')
+
+#form for creating new blog review(comment)
+class Blog_review_form(forms.ModelForm):
+    class Meta:
+        model = models.Blog_reviews
+        fields = ('comment',)
+
+#form for editing blog
+class Edit_Blog(forms.ModelForm):
+    #to remove the currently and clear
+    image = forms.ImageField(label=('Blog Image'), required=False, error_messages = {'invalid':("Image files only")}, widget=forms.FileInput)
+
+    class Meta:
+        model = models.Blog
+        fields = ('title','body','image')
+
+
+
+blog/models.py :-
+from django.db import models
+from django.contrib.auth.models import User
+
+class Blog(models.Model):
+    title = models.CharField(max_length=70)
+    body = models.TextField(blank=False)
+    image = models.ImageField(default='default.png', blank = True)
+    author = models.ForeignKey(User, default=None, on_delete='cascade')
+    created_date = models.DateTimeField(auto_now_add = True)
+
+    class Meta:
+        verbose_name = 'Blog'
+        verbose_name_plural = 'Blogs'
+
+    def __str__(self):
+        return self.title
+
+    def get_link(self):
+        return self.id
+
+    def snippet(self):
+        if len(self.body) > 50:
+            return self.body[:50]+' ...'
+        else:
+            return self.body
+
+    def img_file_name(self):
+        return self.image.path
+
+
+class Blog_reviews(models.Model):
+    blog = models.ForeignKey(Blog, default=None,on_delete=models.CASCADE)
+    comment = models.TextField()
+    author = models.ForeignKey(User, default=None, on_delete='cascade')
+    created_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Blog_reviews'
+        verbose_name_plural = 'Blog_reviews'
+
+    def __str__(self):
+        return self.blog.title
+
+
+
+blog/urls.py :-
+from django.conf.urls import url
+from . import views
+
+app_name='blog'
+
+urlpatterns = [
+    url(r'^$', views.portfolio, name='portfolio'),
+    url(r'^list/$', views.list, name='list'),
+    url(r'^about/$', views.about, name="about"),
+    url(r'^announcements/$', views.announcements, name="announcements"),
+    url(r'^calenders/$', views.calenders, name="calenders"),
+    url(r'^create/$', views.create_blog, name='create_blog'),
+    url(r'^confirm-delete/(?P<blog_id>\d+)/$', views.delete_blog_confirmation, name='delete_blog_confirmation'),
+    url(r'^delete/(?P<blog_id>\d+)/$', views.delete_blog, name='delete_blog'),
+    url(r'^delete-review/(?P<blog_review_id>\d+)/$', views.delete_blog_review, name='delete_blog_review'),
+    url(r'^comment/(?P<blog_id>\d+)/$', views.comment_blog, name='comment_blog'),
+    url(r'^edit/(?P<blog_id>\d+)/$', views.edit_blog, name='edit_blog'),
+    url(r'^(?P<blog_id>\d+)/$', views.blog_detail, name='blog_detail'),
+]
+
+
+
+blog/views.py :-
+#for displaying webpages
+from django.shortcuts import render, redirect
+#importing models
+from .models import Blog, Blog_reviews
+#for checking if the user is logged in
+from django.contrib.auth.decorators import login_required
+#for importing forms
+from . import forms
+#for deleting image files
+import os
+#for messages
+from django.contrib import messages
+
+#displaying list of all blogs
+def list(request):
+   #getting all blogs
+   blogs = Blog.objects.all().order_by('-created_date')
+   return render(request , 'blog/index.html', {'blogs': blogs})
+
+#detail of a particular blog
+def blog_detail(request, blog_id):
+   #getting blog data
+   blog = Blog.objects.get(id = blog_id)
+   #getting blog comments
+   reviews = Blog_reviews.objects.filter(blog = blog).order_by('-created_date')
+   #To get the name of the current user(whether to show delete-btn and edit-btn or not)
+   authorised = False
+   if request.user.is_authenticated:
+      user = request.user.username
+      if str(blog.author) == user:
+         authorised = True
+   #dictionary to store data to be passed in the render function
+   context = {'blog': blog,'authorised': authorised, 'reviews': reviews}
+   return render(request, 'blog/blog_detail.html', context)
+
+@login_required
+def create_blog(request):
+   #to create blog(post data and create blog)
+   if request.method == 'POST':
+      form = forms.CreateBlog(request.POST, request.FILES)
+      if form.is_valid():
+         data = form.save(commit=False)
+         data.author = request.user
+         data.save()
+         msg = 'Your blog has been created!'
+         messages.success(request, msg)
+      return redirect('blog:list')
+   #to create blog(create form and get data)
+   else:
+      form = forms.CreateBlog()
+   return render(request, 'blog/blog_create.html', {'form': form})
+
+
+@login_required
+def delete_blog(request, blog_id):
+   #getting data of the blog
+   blog = Blog.objects.get(pk = blog_id)
+   author = blog.author
+   img = blog.img_file_name()
+
+   #checking if the author of the blog and the currently logged in user are the same
+   if request.user == author:
+      blog.delete()
+      #delete the image from images folder
+      if not 'default.png' in img:
+         os.remove(img)
+      #showing success msg
+      msg = 'Blog has been deleted!'
+      messages.success(request, msg)
+   return redirect('blog:list')
+
+
+@login_required
+def delete_blog_review(request, blog_review_id):
+   review = Blog_reviews.objects.get(pk = blog_review_id)
+   author = review.author
+
+   #checking if the author of the blog and the currently logged in user are the same
+   if request.user == author:
+      review.delete()
+      #showing success msg
+      msg = 'Comment has been deleted!'
+      messages.success(request, msg)
+   return redirect('blog:blog_detail', blog_id = review.blog.pk)
+
+
+@login_required
+def comment_blog(request, blog_id):
+   #getting data of the blog
+   blog = Blog.objects.get(pk=blog_id)
+   #to comment blog(post data and comment blog)
+   if request.method == 'POST':
+      form = forms.Blog_review_form(request.POST)
+      if form.is_valid():
+         review = form.save(commit=False)
+         review.blog = blog
+         review.author = request.user
+         # review.author = request.user
+         review.save()
+         return redirect('blog:blog_detail', blog_id = review.blog.pk)
+   #to comment blog(create form and get data)
+   else:
+      form = forms.Blog_review_form()
+   #dictionary to store data to be passed in the render function
+   context = {'form': form, 'blog_id': blog_id}
+   return render(request, 'blog/comment_blog.html', context)
+
+@login_required
+def edit_blog(request, blog_id):
+   #getting data of the blog
+   blog = Blog.objects.get(pk=blog_id)
+   #if the current user and the author of the blog are same
+   if blog.author == request.user:
+      #to edit blog(post data and edit blog)
+      if request.method == 'POST':
+         form = forms.Edit_Blog(request.POST, request.FILES, instance=blog)
+         if form.is_valid():
+            form.save()
+            return redirect('blog:blog_detail', blog_id = blog.pk)
+      #to edit blog(create form and get data)
+      else:
+         form = forms.Edit_Blog(instance=blog)
+      #dictionary to store data to be passed in the render function
+      context = {'form': form,'blog':blog,'blog_id': blog_id}
+      return render(request, 'blog/edit_blog.html', context)
+   else:
+      error_msg = 'Sorry! you are not authorised'
+      return render(request, 'errors.html', {'error_msg':error_msg})
+
+#confirmation for deletion of the blog
+@login_required
+def delete_blog_confirmation(request, blog_id):
+   return render(request, 'blog/delete-confirmation.html', {'blog_id': blog_id})
+
+#displaying the about page
+def about(request):
+    return render(request, 'about.html')
+
+def announcements(request):
+   msg = 'No announcements yet!'
+   return render(request, 'informations.html', {'msg':msg})
+
+def calenders(request):
+   msg = 'No calenders yet!'
+   return render(request, 'informations.html', {'msg':msg})
+
+def portfolio(request):
+   return render(request, 'portfolio.html')
+
+
+
+blogapp/__init__.py :-
+#this file is empty
+
+
+
+blogapp/settings.py :-
+"""
+Django settings for blogapp project.
+
+Generated by 'django-admin startproject' using Django 2.2.5.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/2.2/topics/settings/
+
+For the full list of settings and their values, see
+https://docs.djangoproject.com/en/2.2/ref/settings/
+"""
+
+import os
+
+# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = 'f+t0d-os90=p3vtdrzj8#$5oev4dm+hmzuo@bwnwxj%zj4o^@e'
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = True
+
+ALLOWED_HOSTS = []
+
+
+# Application definition
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'blog',
+    'accounts',
+    'crispy_forms',
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'blogapp.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = 'blogapp.wsgi.application'
+
+
+# Database
+# https://docs.djangoproject.com/en/2.2/ref/settings/#databases
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+    }
+}
+
+
+# Password validation
+# https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+
+# Internationalization
+# https://docs.djangoproject.com/en/2.2/topics/i18n/
+
+LANGUAGE_CODE = 'en-us'
+
+TIME_ZONE = 'UTC'
+
+USE_I18N = True
+
+USE_L10N = True
+
+USE_TZ = True
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/2.2/howto/static-files/
+
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'css')
+]
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'images')
+
+#template for using crispy forms
+CRISPY_TEMPLATE_PACK = 'bootstrap4'
+
+#url to redirect when @login_required decorator is used
+LOGIN_URL = 'accounts:login_user'
+
+
+
+
+blogapp/urls.py :-
+from django.contrib import admin
+from django.urls import path, include
+from django.conf.urls import url
+#for using the media file variables
+from django.conf import settings
+#for static files(css)
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+#for media files(images)
+from django.conf.urls.static import static
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    url('', include('blog.urls')),
+    url(r'^accounts/', include('accounts.urls')),
+]
+#appending url for static_files(css)
+urlpatterns += staticfiles_urlpatterns()
+#appending url for media_file(images)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+
+
+blogapp/wsgi.py :-
+"""
+WSGI config for blogapp project.
+
+It exposes the WSGI callable as a module-level variable named ``application``.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/2.2/howto/deployment/wsgi/
+"""
+
+import os
+
+from django.core.wsgi import get_wsgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'blogapp.settings')
+
+application = get_wsgi_application()
+
+
+
+css/portfolio.css :-
+body{
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: url('background.jpg');
+    font-family: Consolas, monaco, monospace;
+    background-repeat: no-repeat;
+    background-size: cover;
+    color: white;
+}
+.main{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 20px;
+}
+
+
+
+css/style.css :-
+body {
+background: #fafafa;
+color: #333333;
+margin-top: 5rem;
+padding: 20px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+color: #444444;
+}
+
+ul {
+margin: 0;
+}
+
+.bg-steel {
+background-color: #5f788a;
+}
+
+.site-header .navbar-nav .nav-link {
+color: #cbd5db;
+}
+
+.site-header .navbar-nav .nav-link:hover {
+color: #ffffff;
+}
+
+.content-section {
+background: #ffffff;
+padding: 10px 20px;
+border: 1px solid #dddddd;
+border-radius: 3px;
+margin-bottom: 20px;
+}
+
+.article-title {
+color: #444444;
+}
+
+a.article-title:hover {
+color: #428bca;
+text-decoration: none;
+}
+
+.article-content {
+white-space: pre-line;
+}
+
+.article-img {
+height: 65px;
+width: 65px;
+margin-right: 16px;
+}
+
+.article-metadata {
+padding-bottom: 1px;
+margin-bottom: 4px;
+border-bottom: 1px solid #e3e3e3
+}
+
+.article-metadata a:hover {
+color: #333;
+text-decoration: none;
+}
+
+.article-svg {
+width: 25px;
+height: 25px;
+vertical-align: middle;
+}
+
+.account-img {
+height: 125px;
+width: 125px;
+margin-right: 20px;
+margin-bottom: 16px;
+}
+
+.account-heading {
+font-size: 2.5rem;
+}
+
+.delete-comment {
+    float: right;
+    transform: scale(0.7);
+    font-size: 20px;
+}
+
+.blog-body{
+    font-size: 20px;
+}
+
+
+
+templates/about.html :-
+{% extends 'base-layout.html' %}
+
+{% block content %}
+<div>
+    <h1>Blogapp</h1>
+    <p>This is a blogapp created in Python. It utilises the Python web framework <a href="https://docs.djangoproject.com/en/2.2/">Django 2.2</a></p>
+    <p>It provides following features: -</p>
+    <ul>
+        <li>Login</li>
+        <li>Logout</li>
+        <li>Signup(Creating user profile)</li>
+        <li>Creating Blogs</li>
+        <li>Editing Blogs</li>
+        <li>Deleting Blogs</li>
+        <li>Posting Comments</li>
+        <li>Deleting Comments</li>
+        <li>Editing User Profile</li>
+        <li>Checking User Profiles</li>
+    </ul>
+</div>
+{% endblock %}
+
+
+
+templates/base-layout.html :-
+{% load static from staticfiles %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Link for using Bootstrap -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <!-- Link to Custom Css file -->
+    <link rel="stylesheet" href="{% static 'style.css'%}">
+    <title>Django Blog</title>
+</head>
+<body>
+    <!-- Navigation Bar as the header -->
+    <header class="site-header">
+    <nav class="navbar navbar-expand-md navbar-dark bg-steel fixed-top">
+        <div class="container">
+        <a class="navbar-brand mr-4" href="{% url 'blog:portfolio' %}">Blogger</a>
+        <div class="collapse navbar-collapse" id="navbarToggle">
+            <div class="navbar-nav mr-auto">
+            <a class="nav-item nav-link" href="{% url 'blog:list' %}">Home</a>
+            <a class="nav-item nav-link" href="{% url 'blog:about' %}">About</a>
+            </div>
+            <!-- Navbar Right Side -->
+            <div class="navbar-nav">
+            {% if request.user.is_authenticated %}
+                <a class="nav-item nav-link" href="{% url 'accounts:logout_user' %}">Logout</a>
+                <a class="nav-item nav-link" href="{% url 'blog:create_blog' %}">Create Blog</a>
+                <a class="nav-item nav-link" href="{% url 'accounts:user_profile' %}">Profile</a>
+            {% else %}
+                <a class="nav-item nav-link" href="{% url 'accounts:login_user' %}">Login</a>
+                <a class="nav-item nav-link" href="{% url 'accounts:signup_user' %}">Sign Up</a>
+            {% endif %}
+            </div>
+        </div>
+        </div>
+    </nav>
+    </header>
+
+    <main role="main" class="container">
+            <div class="row">
+              <div class="col-md-8">
+                {% if messages %}
+                    {% for msg in messages %}
+                    <div class="alert alert-success">
+                        {{ msg }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                {% block content %}
+                {% endblock %}
+              </div>
+              <div class="col-md-4">
+                <div class="content-section">
+                  <h3>Our Sidebar</h3>
+                  <p class='text-muted'>Get Quick Information Here
+                    <ul class="list-group">
+                      <li class="list-group-item list-group-item-light"><a class="list-group-item-light" href="{% url 'blog:list' %}">Latest Posts</a></li>
+                      <li class="list-group-item list-group-item-light"><a class="list-group-item-light" href="{% url 'blog:announcements' %}">Announcements</a></li>
+                      <li class="list-group-item list-group-item-light"><a class="list-group-item-light" href="{% url 'blog:calenders' %}">Calenders</a></li>
+                    </ul>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </main>
+
+
+    <!-- scripts for using bootstrap -->
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+</body>
+</html>
+
+
+
+templates/errors.html :-
+{% extends 'base-layout.html' %}
+
+{% block content%}
+<h2 class="text-danger">{{msg}}</h2>
+{% endblock %}
+
+
+
+templates/informations.html :-
+{% extends 'base-layout.html' %}
+
+{% block content %}
+<div>
+    <h1>{{msg}}</h1>
+</div>
+{% endblock %}
+
+
+
+
+templates/portfolio.html :-
+{% load static from staticfiles %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Link for using Bootstrap -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <!-- Link to Custom Css file -->
+    <link rel="stylesheet" href="{% static 'portfolio.css'%}">
+    <title>Django Blog</title>
+</head>
+<body>
+<div class="container main">
+    <h1 class="text">Blogapp</h1>
+    <p>This is a blogapp created in Python. It utilises the Python web framework <a class="text-warning" href="https://docs.djangoproject.com/en/2.2/">Django 2.2</a></p>
+    <p>Created By:- </p>
+    <ul>
+        <li>Ayush Gangwar</li>
+        <li>Akash Chandra</li>
+        <li>Ansh Pathak</li>
+        <li>Vanshika Agarwal</li>
+    </ul>
+    <p>Guided By:- Mr. Shaktirish Kumar Agarwal
+    (PGT Computer Science, Ben-Hur Public School)</p>
+    <a class="btn btn-primary" href="{% url 'blog:list' %}">Enter Site</a>
+</div>
+<!-- scripts for using bootstrap -->
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+</body>
+</html>
+
+
+
+manage.py :-
+#!/usr/bin/env python
+"""Django's command-line utility for administrative tasks."""
+import os
+import sys
+
+
+def main():
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'blogapp.settings')
+    try:
+        from django.core.management import execute_from_command_line
+    except ImportError as exc:
+        raise ImportError(
+            "Couldn't import Django. Are you sure it's installed and "
+            "available on your PYTHONPATH environment variable? Did you "
+            "forget to activate a virtual environment?"
+        ) from exc
+    execute_from_command_line(sys.argv)
+
+
+if __name__ == '__main__':
+    main()
+
+
+

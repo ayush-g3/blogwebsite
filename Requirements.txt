@@ -1,0 +1,73 @@
+Software requirements :-
+
+Operating system :- Windows 8 or more / Linux etc.
+
+Web Browser :- Google Chrome(recommended)
+
+Python :- Version 3.6/3.7
+
+Django :-  Version 2.2.5
+
+Pillow :- 4.1.1
+
+Django-crispy-forms :- 1.7.2
+ 
+
+This project requires an active installation of 'Python' programming language.
+(Python3.6 is recommended)
+
+
+
+The libraries used are :-
+
+1. django
+
+2. pillow
+
+3. django-crispy-forms
+
+
+
+
+
+For other operating systems you need to install the libraries manually.
+
+1. pip install django==2.2.5
+
+2. pip install pillow==4.1.1
+
+3. pip install django-crispy-forms==1.7.2
+
+
+
+For best user experience use the 'Google Chrome' as the web browser to access the 
+website, it will also work on other web 
+browsers(which are updated) as well.
+
+
+
+In case of any errors:-
+
+Make sure that the server is allowed through the firewall 
+or the libraries may not be installed correctly or another 
+application may be 
+running on the port 8000, then try using another port.
+
+
+
+Hardware requirements :-
+
+This project requires a Computer for running the server the minimum requirements 
+for proper functioning are :-
+
+Ram :- 2 GB or more
+
+Processor :- 2.00 GHz or more
+
+
+
+An active internet connection is also required because Bootstrap4 and 
+Jquery3(for bootstrap) are being used.
+
+
+
